@@ -1,0 +1,119 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+  <title>Paper Crypto – Login</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
+</head>
+<body class="bg-gray-50 min-h-screen flex items-center justify-center p-4">
+  <div class="bg-white rounded-2xl shadow-lg w-full max-w-md p-8">
+    <h1 class="text-3xl font-bold text-center text-blue-600 mb-2">Paper Crypto</h1>
+    <p class="text-center text-gray-500 mb-8">Simulated Coinbase-style exchange</p>
+
+    <div id="message" class="hidden mb-4 p-3 rounded text-sm"></div>
+
+    <form id="loginForm" class="space-y-4">
+      <input type="email" id="loginEmail" placeholder="Email" required
+             class="w-full px-4 py-3 border rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500">
+      <input type="password" id="loginPassword" placeholder="Password" required
+             class="w-full px-4 py-3 border rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500">
+      <button type="submit" class="w-full bg-blue-600 text-white py-3 rounded-xl font-semibold hover:bg-blue-700">
+        Log In
+      </button>
+    </form>
+
+    <div class="text-center my-4 text-gray-500">or</div>
+
+    <form id="signupForm" class="space-y-4">
+      <input type="text" id="signupName" placeholder="Display name / username" required
+             class="w-full px-4 py-3 border rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500">
+      <input type="email" id="signupEmail" placeholder="Email" required
+             class="w-full px-4 py-3 border rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500">
+      <input type="password" id="signupPassword" placeholder="Password (min 6 characters)" required
+             class="w-full px-4 py-3 border rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500">
+      <button type="submit" class="w-full bg-green-600 text-white py-3 rounded-xl font-semibold hover:bg-green-700">
+        Create Account
+      </button>
+    </form>
+  </div>
+
+  <script>
+    const firebaseConfig = {
+      apiKey: "AIzaSyBAn7HGVRDEk8PRMVghOn2SWHQfI_iGjzY",
+      authDomain: "papercrypto-503bb.firebaseapp.com",
+      projectId: "papercrypto-503bb",
+      storageBucket: "papercrypto-503bb.firebasestorage.app",
+      messagingSenderId: "48170258665",
+      appId: "1:48170258665:web:d87aaaf8638eb896466078"
+    };
+
+    const ADMIN_EMAIL = "Balderston610@gmail.com";
+
+    firebase.initializeApp(firebaseConfig);
+    const auth = firebase.auth();
+    const db = firebase.firestore();
+
+    const messageEl = document.getElementById('message');
+
+    function showMessage(text, isError = true) {
+      messageEl.textContent = text;
+      messageEl.className = `mb-4 p-3 rounded text-sm ${isError ? 'bg-red-100 text-red-700' : 'bg-green-100 text-green-700'}`;
+      messageEl.classList.remove('hidden');
+    }
+
+    document.getElementById('loginForm').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const email = document.getElementById('loginEmail').value;
+      const password = document.getElementById('loginPassword').value;
+      try {
+        await auth.signInWithEmailAndPassword(email, password);
+        window.location.href = 'dashboard.html';
+      } catch (err) {
+        showMessage(err.message);
+      }
+    });
+
+    document.getElementById('signupForm').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const name = document.getElementById('signupName').value.trim();
+      const email = document.getElementById('signupEmail').value;
+      const password = document.getElementById('signupPassword').value;
+
+      try {
+        const userCred = await auth.createUserWithEmailAndPassword(email, password);
+        const uid = userCred.user.uid;
+
+        await db.collection('users').doc(uid).set({
+          uid: uid,
+          email: email,
+          name: name,
+          balances: {
+            BTC: 0,
+            ETH: 0,
+            SOL: 0,
+            USDT: 0
+          },
+          createdAt: firebase.firestore.FieldValue.serverTimestamp()
+        });
+
+        showMessage('Account created! Redirecting…', false);
+        setTimeout(() => {
+          window.location.href = 'dashboard.html';
+        }, 1000);
+      } catch (err) {
+        showMessage(err.message);
+      }
+    });
+
+    auth.onAuthStateChanged((user) => {
+      if (user) {
+        window.location.href = 'dashboard.html';
+      }
+    });
+  </script>
+</body>
+</html>

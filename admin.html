@@ -1,0 +1,181 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+  <title>Paper Crypto – Admin</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
+</head>
+<body class="bg-gray-100 min-h-screen">
+  <div class="max-w-md mx-auto bg-white min-h-screen shadow-lg">
+    <div class="bg-red-600 text-white p-4 flex justify-between items-center">
+      <h1 class="text-xl font-bold">Admin Panel</h1>
+      <button id="logoutBtn" class="text-sm bg-red-700 px-3 py-1 rounded">Logout</button>
+    </div>
+
+    <div id="notAdmin" class="hidden p-8 text-center text-red-600">
+      Access denied. Only admin can view this page.
+    </div>
+
+    <div id="adminContent" class="hidden">
+      <!-- Top Up -->
+      <div class="p-4 border-b">
+        <h2 class="font-semibold mb-3">Top Up User</h2>
+        <form id="topupForm" class="space-y-3">
+          <select id="userSelect" class="w-full px-4 py-3 border rounded-xl" required>
+            <option value="">Select user...</option>
+          </select>
+          <select id="topupCoin" class="w-full px-4 py-3 border rounded-xl">
+            <option value="BTC">BTC</option>
+            <option value="ETH">ETH</option>
+            <option value="SOL">SOL</option>
+            <option value="USDT">USDT</option>
+          </select>
+          <input type="number" id="topupAmount" placeholder="Amount" step="any" min="0" required
+                 class="w-full px-4 py-3 border rounded-xl">
+          <button type="submit" class="w-full bg-green-600 text-white py-3 rounded-xl font-semibold">
+            Top Up
+          </button>
+        </form>
+        <div id="topupMsg" class="mt-2 text-sm hidden"></div>
+      </div>
+
+      <!-- Pending Transfers -->
+      <div class="p-4">
+        <h2 class="font-semibold mb-3">Pending Transfers</h2>
+        <div id="pendingList" class="space-y-3"></div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const firebaseConfig = {
+      apiKey: "AIzaSyBAn7HGVRDEk8PRMVghOn2SWHQfI_iGjzY",
+      authDomain: "papercrypto-503bb.firebaseapp.com",
+      projectId: "papercrypto-503bb",
+      storageBucket: "papercrypto-503bb.firebasestorage.app",
+      messagingSenderId: "48170258665",
+      appId: "1:48170258665:web:d87aaaf8638eb896466078"
+    };
+
+    const ADMIN_EMAIL = "Balderston610@gmail.com";
+
+    firebase.initializeApp(firebaseConfig);
+    const auth = firebase.auth();
+    const db = firebase.firestore();
+
+    auth.onAuthStateChanged(async (user) => {
+      if (!user) {
+        window.location.href = 'index.html';
+        return;
+      }
+      if (user.email !== ADMIN_EMAIL) {
+        document.getElementById('notAdmin').classList.remove('hidden');
+        return;
+      }
+      document.getElementById('adminContent').classList.remove('hidden');
+      loadUsers();
+      loadPending();
+    });
+
+    async function loadUsers() {
+      const snap = await db.collection('users').get();
+      const select = document.getElementById('userSelect');
+      select.innerHTML = '<option value="">Select user...</option>';
+      snap.forEach(doc => {
+        const data = doc.data();
+        const opt = document.createElement('option');
+        opt.value = doc.id;
+        opt.textContent = `${data.name || 'No name'} (${data.email})`;
+        select.appendChild(opt);
+      });
+    }
+
+    document.getElementById('topupForm').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const uid = document.getElementById('userSelect').value;
+      const coin = document.getElementById('topupCoin').value;
+      const amount = parseFloat(document.getElementById('topupAmount').value);
+      if (!uid || amount <= 0) return;
+
+      try {
+        await db.collection('users').doc(uid).update({
+          [`balances.${coin}`]: firebase.firestore.FieldValue.increment(amount)
+        });
+        showMsg('Top up successful!', false);
+        document.getElementById('topupForm').reset();
+      } catch (err) {
+        showMsg(err.message, true);
+      }
+    });
+
+    function showMsg(text, isError) {
+      const el = document.getElementById('topupMsg');
+      el.textContent = text;
+      el.className = `mt-2 text-sm ${isError ? 'text-red-600' : 'text-green-600'}`;
+      el.classList.remove('hidden');
+    }
+
+    function loadPending() {
+      db.collection('transactions')
+        .where('status', '==', 'pending')
+        .orderBy('createdAt', 'desc')
+        .onSnapshot(snap => {
+          const container = document.getElementById('pendingList');
+          if (snap.empty) {
+            container.innerHTML = '<p class="text-gray-400">No pending transfers</p>';
+            return;
+          }
+          let html = '';
+          snap.forEach(doc => {
+            const tx = doc.data();
+            html += `
+              <div class="bg-yellow-50 p-3 rounded-xl border">
+                <p class="font-medium">${tx.amount} ${tx.coin}</p>
+                <p class="text-sm text-gray-600">From: ${tx.fromEmail}</p>
+                <p class="text-sm text-gray-600">To: ${tx.toEmail}</p>
+                <div class="flex gap-2 mt-2">
+                  <button onclick="approve('${doc.id}', '${tx.toUid}', '${tx.coin}', ${tx.amount})"
+                          class="flex-1 bg-green-600 text-white py-2 rounded text-sm">Approve</button>
+                  <button onclick="reject('${doc.id}', '${tx.fromUid}', '${tx.coin}', ${tx.amount})"
+                          class="flex-1 bg-red-600 text-white py-2 rounded text-sm">Reject</button>
+                </div>
+              </div>
+            `;
+          });
+          container.innerHTML = html;
+        });
+    }
+
+    window.approve = async (txId, toUid, coin, amount) => {
+      try {
+        await db.collection('users').doc(toUid).update({
+          [`balances.${coin}`]: firebase.firestore.FieldValue.increment(amount)
+        });
+        await db.collection('transactions').doc(txId).update({ status: 'approved' });
+      } catch (err) {
+        alert(err.message);
+      }
+    };
+
+    window.reject = async (txId, fromUid, coin, amount) => {
+      try {
+        // Refund the sender
+        await db.collection('users').doc(fromUid).update({
+          [`balances.${coin}`]: firebase.firestore.FieldValue.increment(amount)
+        });
+        await db.collection('transactions').doc(txId).update({ status: 'rejected' });
+      } catch (err) {
+        alert(err.message);
+      }
+    };
+
+    document.getElementById('logoutBtn').addEventListener('click', () => {
+      auth.signOut().then(() => window.location.href = 'index.html');
+    });
+  </script>
+</body>
+</html>
